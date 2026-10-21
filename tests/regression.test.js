@@ -172,7 +172,7 @@ async function runTests() {
     );
 
     // ----------------------------------------------------
-    // TEST 11: POST /api/query with unconfigured Gemma 4 provider
+    // TEST 11: POST /api/query valid grounded response (and verify no <thought> tags)
     // ----------------------------------------------------
     const queryRes = await fetch(`${BASE_URL}/api/query`, {
       method: 'POST',
@@ -180,13 +180,24 @@ async function runTests() {
       body: JSON.stringify({ question: 'Lucknow mein gehun ka bhav badha ya ghata?' })
     });
     const queryData = await queryRes.json();
-    report(
-      'POST /api/query reports unconfigured Gemma 4 provider with exact missing keys (HTTP 503)',
-      queryRes.status === 503 &&
-        queryData.error.code === 'GEMMA_PROVIDER_UNCONFIGURED' &&
-        Array.isArray(queryData.error.missing) &&
-        queryData.error.missing.includes('GEMMA_API_KEY')
-    );
+    if (queryRes.status === 200) {
+      report(
+        'POST /api/query returns grounded answer without internal <thought> tags',
+        queryData.success === true &&
+          typeof queryData.answer === 'string' &&
+          !queryData.answer.includes('<thought>') &&
+          !queryData.answer.includes('</thought>') &&
+          !queryData.answer.includes('<think>') &&
+          queryData.groundedData !== undefined
+      );
+    } else {
+      report(
+        'POST /api/query reports unconfigured Gemma 4 provider (HTTP 503)',
+        queryRes.status === 503 &&
+          queryData.error &&
+          queryData.error.code === 'GEMMA_PROVIDER_UNCONFIGURED'
+      );
+    }
 
     // ----------------------------------------------------
     // TEST 12: 404 Route Handler

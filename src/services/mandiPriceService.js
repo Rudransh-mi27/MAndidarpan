@@ -1,8 +1,9 @@
 const priceService = require('./priceService');
+const mandiService = require('./mandiService');
 const { isConfigured } = require('../config/dataGovApi');
 
 /**
- * Adapter preserving compatibility with Part 3, 4, 5 endpoints
+ * Adapter preserving compatibility across all Parts.
  */
 async function getTodayPrices(params = {}) {
   return priceService.getTodayPrices(params);
@@ -13,7 +14,7 @@ async function getPriceTrend(params = {}) {
 }
 
 async function compareMandis(params = {}) {
-  return priceService.compareMandis(params);
+  return mandiService.compareMandis(params);
 }
 
 function isDataGovConfigured() {

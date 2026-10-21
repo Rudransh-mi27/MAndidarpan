@@ -343,16 +343,19 @@ The backend uses standard OpenAI-compatible `/chat/completions` protocol support
 |---|---|---|
 | `GET /api/health` | **VERIFIED** | Live server test (HTTP 200) |
 | Missing/Placeholder `DATA_GOV_API_KEY` | **VERIFIED** | Automated test (HTTP 503 structured error) |
+| Live data.gov.in Government Network Call | **VERIFIED** | Verified with live Agmarknet queries (Paddy in Lucknow, Wheat in Kanpur) |
 | Missing query parameters (`commodity`) | **VERIFIED** | Automated test (HTTP 400 validation error) |
 | Invalid parameters (negative days) | **VERIFIED** | Automated test (HTTP 400 validation error) |
 | Invalid geographic coordinates | **VERIFIED** | Automated test (HTTP 400 invalid coordinates) |
 | Missing/Placeholder Gemma 4 Credentials | **VERIFIED** | Automated test (HTTP 503 explaining missing keys) |
 | Pure JavaScript Mathematical Calculations | **VERIFIED** | Deterministic unit tests for price changes, %, min, max, avg |
-| Insufficient History Handling (<2 records) | **VERIFIED** | Unit test verifying `insufficientHistory: true` |
+| Insufficient History Handling (<2 records) | **VERIFIED** | Unit test verifying `insufficient_data` status |
+| Calendar Gaps as Null (No Interpolation) | **VERIFIED** | Unit test verifying missing dates are represented as null |
 | Haversine Distance Formula | **VERIFIED** | Tested with known geographic coordinates (Lucknow -> Kanpur) |
+| Like-for-Like Mandi Comparison | **VERIFIED** | Unit test verifying different varieties & grades are never mixed |
+| Automatic Basis Deterministic Tie-Breaking | **VERIFIED** | Unit test verifying FAQ prioritization and alphabetical ordering |
 | Intent Extraction & Hindi Crop Translation | **VERIFIED** | Unit test mapping *gehun* -> Wheat, *pyaz* -> Onion |
 | Follow-up Clarification for Missing Crop | **VERIFIED** | Unit test verifying polite follow-up prompt |
 | Untrusted Model Intent Sanitization | **VERIFIED** | Unit test rejecting disallowed operations and out-of-range days |
 | 404 Catch-All & Centralized Error Handler | **VERIFIED** | Automated test verifying structured JSON response |
-| Live data.gov.in Government Network Call | **UNVERIFIED** *(Expected)* | Requires developer's personal `DATA_GOV_API_KEY` in `.env` |
 | Live Gemma 4 Cloud Inference Provider | **UNVERIFIED** *(Expected)* | Requires developer's personal `GEMMA_API_KEY` in `.env` |

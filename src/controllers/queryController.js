@@ -15,6 +15,7 @@ const mandiPriceService = require('../services/mandiPriceService');
  * 6. Retrieve real mandi records from verified backend service.
  * 7. Perform all mathematical calculations in deterministic JavaScript.
  * 8. Pass only verified results to Gemma 4 for natural language explanation.
+ * 9. Defensive output cleaning: guarantee no <thought> tags or reasoning leak into answer.
  */
 async function handleQuery(req, res, next) {
   try {
@@ -73,23 +74,13 @@ async function handleQuery(req, res, next) {
         days: intent.days || 7
       });
 
-      if (trendResult.unconfigured) {
+      if (trendResult.status === 'source_unavailable' || trendResult.unconfigured) {
         return res.status(503).json({
           success: false,
           error: {
             code: 'DATA_GOV_UNCONFIGURED',
-            message: trendResult.error,
+            message: trendResult.error || trendResult.message,
             hint: 'Set DATA_GOV_API_KEY in .env to ground AI answers with real mandi data.'
-          }
-        });
-      }
-
-      if (!trendResult.success) {
-        return res.status(502).json({
-          success: false,
-          error: {
-            code: 'DATA_RETRIEVAL_FAILED',
-            message: trendResult.error
           }
         });
       }
@@ -102,23 +93,13 @@ async function handleQuery(req, res, next) {
         state: intent.state
       });
 
-      if (compareResult.unconfigured) {
+      if (compareResult.status === 'source_unavailable' || compareResult.unconfigured) {
         return res.status(503).json({
           success: false,
           error: {
             code: 'DATA_GOV_UNCONFIGURED',
-            message: compareResult.error,
+            message: compareResult.error || compareResult.message,
             hint: 'Set DATA_GOV_API_KEY in .env to ground AI answers with real mandi data.'
-          }
-        });
-      }
-
-      if (!compareResult.success) {
-        return res.status(502).json({
-          success: false,
-          error: {
-            code: 'DATA_RETRIEVAL_FAILED',
-            message: compareResult.error
           }
         });
       }
@@ -132,23 +113,13 @@ async function handleQuery(req, res, next) {
         state: intent.state
       });
 
-      if (priceResult.unconfigured) {
+      if (priceResult.status === 'unconfigured' || priceResult.unconfigured) {
         return res.status(503).json({
           success: false,
           error: {
             code: 'DATA_GOV_UNCONFIGURED',
             message: priceResult.error,
             hint: 'Set DATA_GOV_API_KEY in .env to ground AI answers with real mandi data.'
-          }
-        });
-      }
-
-      if (!priceResult.success) {
-        return res.status(502).json({
-          success: false,
-          error: {
-            code: 'DATA_RETRIEVAL_FAILED',
-            message: priceResult.error
           }
         });
       }
@@ -163,23 +134,19 @@ async function handleQuery(req, res, next) {
       calculatedData: groundedData
     });
 
-    if (!explanationResult.success) {
-      return res.status(502).json({
-        success: false,
-        error: {
-          code: 'AI_EXPLANATION_FAILED',
-          message: explanationResult.error
-        },
-        groundedData // Still provide the verified numbers to the client
-      });
-    }
+    // 8. Defensive output cleaning: guarantee no <thought> tags or reasoning leak into answer
+    const cleanAnswer = gemmaService.cleanGemmaOutput(explanationResult.explanation, {
+      question: trimmedQuestion,
+      intent,
+      calculatedData: groundedData
+    });
 
     return res.status(200).json({
       success: true,
       question: trimmedQuestion,
       intent,
       groundedData,
-      answer: explanationResult.explanation
+      answer: cleanAnswer
     });
   } catch (err) {
     next(err);
