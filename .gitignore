@@ -1,3 +1,4 @@
+
 # Dependencies
 node_modules/
 */node_modules/
@@ -8,7 +9,7 @@ dist-ssr/
 */dist/
 build/
 
-# Environment and sensitive secrets
+# Environment variables and secrets
 .env
 .env.*
 !.env.example
@@ -23,7 +24,7 @@ yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 
-# OS and Editor files
+# OS and editor files
 .DS_Store
 .DS_Store?
 ._*
@@ -36,6 +37,6 @@ Thumbs.db
 *.swp
 *.swo
 
-# Temporary directories
+# Temporary files
 /tmp/
 .temp/
