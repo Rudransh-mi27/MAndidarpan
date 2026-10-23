@@ -1,8 +1,8 @@
 // MandiDarpan Unified API Service
 // Connects to MandiMitra backend with resilient port fallback (5000 / 5001)
 
-const PRIMARY_API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5001';
-const FALLBACK_API_URL = 'http://localhost:5001';
+const PRIMARY_API_URL = import.meta.env.VITE_API_URL || 'https://gdg-srmcem.onrender.com/';
+const FALLBACK_API_URL = 'https://gdg-srmcem.onrender.com/';
 
 let activeBaseUrl = PRIMARY_API_URL;
 
