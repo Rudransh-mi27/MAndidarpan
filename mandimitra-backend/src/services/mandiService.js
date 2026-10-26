@@ -1,39 +1,53 @@
+
 const { fetchMandiPrices } = require('./priceService');
-const { calculateDistance, isValidCoordinates } = require('../utils/distance');
+const {
+  calculateDistance,
+  isValidCoordinates,
+} = require('../utils/distance');
+const { getMandiCoordinates } = require('../utils/mandiCoordinates');
+const { getMandiLocation } = require('./mandiLocationService');
 
 /**
- * Validates mandi comparison query parameters.
- * 
- * @param {object} params
- * @returns {{ isValid: boolean, code?: string, error?: string, commodity: string, district?: string, state?: string, farmerCoords?: { lat: number, lon: number }|null, sortBy: string }}
+ * Validate query parameters for mandi comparison.
  */
 function validateCompareParams(params = {}) {
-  const { commodity, district, state, latitude, longitude, lat, lng, sortBy } = params;
+  const {
+    commodity,
+    district,
+    state,
+    latitude,
+    longitude,
+    lat,
+    lng,
+    sortBy,
+  } = params;
 
   if (!commodity || typeof commodity !== 'string' || !commodity.trim()) {
     return {
       isValid: false,
       code: 'MISSING_REQUIRED_PARAMETER',
-      error: 'Query parameter "commodity" is required for mandi comparison.'
+      error: 'Query parameter "commodity" is required for mandi comparison.',
     };
   }
 
-  // Check optional coordinates (accept latitude/longitude or lat/lng)
   const inputLat = latitude !== undefined ? latitude : lat;
   const inputLon = longitude !== undefined ? longitude : lng;
 
   let farmerCoords = null;
+
   if (inputLat !== undefined || inputLon !== undefined) {
     if (!isValidCoordinates(inputLat, inputLon)) {
       return {
         isValid: false,
         code: 'INVALID_COORDINATES',
-        error: 'Provided coordinates (lat, lng) are invalid. Latitude must be between -90 and 90, Longitude between -180 and 180.'
+        error:
+          'Provided coordinates (lat, lng) are invalid. Latitude must be between -90 and 90, Longitude between -180 and 180.',
       };
     }
+
     farmerCoords = {
       lat: Number(inputLat),
-      lon: Number(inputLon)
+      lon: Number(inputLon),
     };
   }
 
@@ -43,30 +57,22 @@ function validateCompareParams(params = {}) {
   return {
     isValid: true,
     commodity: commodity.trim(),
-    district: district && typeof district === 'string' && district.trim() ? district.trim() : null,
-    state: state && typeof state === 'string' && state.trim() ? state.trim() : null,
+    district:
+      district && typeof district === 'string' && district.trim()
+        ? district.trim()
+        : null,
+    state:
+      state && typeof state === 'string' && state.trim()
+        ? state.trim()
+        : null,
     farmerCoords,
     sortBy: validSortBy,
-    requestedSortBy
+    requestedSortBy,
   };
 }
 
 /**
- * Deterministically selects the comparison basis (variety and grade).
- * 
- * Deterministic Selection Rule:
- * 1. If both variety and grade are provided by user, use them.
- * 2. Group all records by normalized (variety, grade) pairs.
- * 3. Count records with valid modal prices for each (variety, grade) pair.
- * 4. Select the pair with the most valid reported records.
- * 5. If counts tie, break tie deterministically:
- *    a) Prefer 'FAQ' grade (Fair Average Quality standard in Indian mandis),
- *    b) Then alphabetical order by variety ascending, then grade ascending.
- * 
- * @param {Array<object>} records 
- * @param {string|null} requestedVariety 
- * @param {string|null} requestedGrade 
- * @returns {{ variety: string, grade: string, isAutoSelected: boolean, selectionRule: string }}
+ * Choose one consistent variety and grade for comparison.
  */
 function determineComparisonBasis(records, requestedVariety, requestedGrade) {
   if (requestedVariety && requestedGrade) {
@@ -74,29 +80,36 @@ function determineComparisonBasis(records, requestedVariety, requestedGrade) {
       variety: requestedVariety.trim(),
       grade: requestedGrade.trim(),
       isAutoSelected: false,
-      selectionRule: 'User specified both variety and grade in query parameters.'
+      selectionRule:
+        'User specified both variety and grade in query parameters.',
     };
   }
 
   const groupMap = new Map();
 
-  for (const r of records) {
-    const v = (r.variety || 'Standard').trim();
-    const g = (r.grade || 'FAQ').trim();
-    const key = `${v.toLowerCase()}::${g.toLowerCase()}`;
+  for (const record of records) {
+    const variety = (record.variety || 'Standard').trim();
+    const grade = (record.grade || 'FAQ').trim();
+    const key = `${variety.toLowerCase()}::${grade.toLowerCase()}`;
 
     if (!groupMap.has(key)) {
       groupMap.set(key, {
-        variety: v,
-        grade: g,
+        variety,
+        grade,
         totalCount: 0,
-        validPriceCount: 0
+        validPriceCount: 0,
       });
     }
 
     const group = groupMap.get(key);
     group.totalCount++;
-    if (r.modalPrice !== null && !isNaN(r.modalPrice) && r.modalPrice > 0 && r.isPriceValid !== false) {
+
+    if (
+      record.modalPrice !== null &&
+      !isNaN(record.modalPrice) &&
+      record.modalPrice > 0 &&
+      record.isPriceValid !== false
+    ) {
       group.validPriceCount++;
     }
   }
@@ -106,88 +119,93 @@ function determineComparisonBasis(records, requestedVariety, requestedGrade) {
       variety: requestedVariety ? requestedVariety.trim() : 'Standard',
       grade: requestedGrade ? requestedGrade.trim() : 'FAQ',
       isAutoSelected: true,
-      selectionRule: 'Default fallback (no records available).'
+      selectionRule: 'Default fallback (no records available).',
     };
   }
 
-  let candidateGroups = Array.from(groupMap.values());
+  let candidates = Array.from(groupMap.values());
+
   if (requestedVariety) {
-    const targetV = requestedVariety.trim().toLowerCase();
-    const filtered = candidateGroups.filter((grp) => grp.variety.toLowerCase() === targetV);
-    if (filtered.length > 0) candidateGroups = filtered;
-  }
-  if (requestedGrade) {
-    const targetG = requestedGrade.trim().toLowerCase();
-    const filtered = candidateGroups.filter((grp) => grp.grade.toLowerCase() === targetG);
-    if (filtered.length > 0) candidateGroups = filtered;
+    const filtered = candidates.filter(
+      (group) =>
+        group.variety.toLowerCase() === requestedVariety.trim().toLowerCase()
+    );
+
+    if (filtered.length > 0) candidates = filtered;
   }
 
-  // Sort candidate groups deterministically:
-  // 1. Highest validPriceCount descending
-  // 2. Highest totalCount descending
-  // 3. Prefer 'FAQ' grade
-  // 4. Alphabetical variety ascending
-  // 5. Alphabetical grade ascending
-  candidateGroups.sort((a, b) => {
+  if (requestedGrade) {
+    const filtered = candidates.filter(
+      (group) =>
+        group.grade.toLowerCase() === requestedGrade.trim().toLowerCase()
+    );
+
+    if (filtered.length > 0) candidates = filtered;
+  }
+
+  candidates.sort((a, b) => {
     if (b.validPriceCount !== a.validPriceCount) {
       return b.validPriceCount - a.validPriceCount;
     }
+
     if (b.totalCount !== a.totalCount) {
       return b.totalCount - a.totalCount;
     }
 
     const aIsFaq = a.grade.toLowerCase() === 'faq';
     const bIsFaq = b.grade.toLowerCase() === 'faq';
+
     if (aIsFaq && !bIsFaq) return -1;
     if (!aIsFaq && bIsFaq) return 1;
 
-    const vCmp = a.variety.localeCompare(b.variety);
-    if (vCmp !== 0) return vCmp;
+    const varietyComparison = a.variety.localeCompare(b.variety);
+
+    if (varietyComparison !== 0) return varietyComparison;
+
     return a.grade.localeCompare(b.grade);
   });
 
-  const bestGroup = candidateGroups[0];
+  const bestGroup = candidates[0];
+
   return {
     variety: bestGroup.variety,
     grade: bestGroup.grade,
     isAutoSelected: true,
-    selectionRule: 'Automatically selected the (variety, grade) pair with the most valid reported records. Ties broken by FAQ priority and alphabetical order.'
+    selectionRule:
+      'Automatically selected the (variety, grade) pair with the most valid reported records. Ties broken by FAQ priority and alphabetical order.',
   };
 }
 
 /**
- * Compares mandi prices for a commodity, strictly comparing like with like.
- * 
- * Strict Consistency Guarantees:
- * 1. Every returned mandi in `mandis` strictly matches the comparisonBasis for variety and grade.
- * 2. Different varieties or grades are never mixed in the same comparison group.
- * 3. Unpriced records for the matching basis are placed in `unpricedMandis`.
- * 4. bestMandi and priceSpread are calculated solely from eligible records in `mandis`.
- * 5. Ties for highest price are represented accurately with explicit tie-breaking rules.
- * 
- * @param {object} params Query parameters
- * @returns {Promise<object>}
+ * Compare mandi prices and calculate distance when coordinates are available.
  */
 async function compareMandis(params = {}) {
   const validation = validateCompareParams(params);
+
   if (!validation.isValid) {
     return {
       success: false,
       status: 'invalid_params',
       code: validation.code,
-      error: validation.error
+      error: validation.error,
     };
   }
 
-  const { commodity, district, state, farmerCoords, sortBy, requestedSortBy } = validation;
+  const {
+    commodity,
+    district,
+    state,
+    farmerCoords,
+    requestedSortBy,
+  } = validation;
+
   const { variety, grade } = params;
 
-  // Retrieve raw records from data.gov.in
   const fetchResult = await fetchMandiPrices({
     commodity,
     district,
     state,
-    limit: 100
+    limit: 100,
   });
 
   if (!fetchResult.success) {
@@ -196,54 +214,113 @@ async function compareMandis(params = {}) {
       status: 'source_unavailable',
       message: 'External price data source is unavailable.',
       error: fetchResult.error,
-      mandis: []
+      mandis: [],
     };
   }
 
-  if (fetchResult.status === 'no_data' || fetchResult.records.length === 0) {
+  if (
+    fetchResult.status === 'no_data' ||
+    !fetchResult.records ||
+    fetchResult.records.length === 0
+  ) {
     return {
       success: true,
       status: 'no_data',
       commodity,
       district: district || 'All',
+      state: state || null,
       message: `No price records found for commodity "${commodity}".`,
       totalMandisCompared: 0,
+      distancesAvailable: false,
       mandis: [],
-      unpricedMandis: []
+      unpricedMandis: [],
     };
   }
 
   const allRecords = fetchResult.records;
 
-  // 1. Determine comparison basis deterministically
   const basis = determineComparisonBasis(allRecords, variety, grade);
-  const targetVarietyLower = basis.variety.trim().toLowerCase();
-  const targetGradeLower = basis.grade.trim().toLowerCase();
+  const targetVariety = basis.variety.trim().toLowerCase();
+  const targetGrade = basis.grade.trim().toLowerCase();
 
-  // 2. Filter records strictly matching BOTH variety AND grade
-  // Requirement 2 & 4: Ensure every returned mandi matches the comparison basis; do not mix grades/varieties!
-  const strictlyMatchingRecords = allRecords.filter((r) => {
-    const v = (r.variety || 'Standard').trim().toLowerCase();
-    const g = (r.grade || 'FAQ').trim().toLowerCase();
-    return v === targetVarietyLower && g === targetGradeLower;
+  const matchingRecords = allRecords.filter((record) => {
+    const recordVariety = (record.variety || 'Standard').trim().toLowerCase();
+    const recordGrade = (record.grade || 'FAQ').trim().toLowerCase();
+
+    return (
+      recordVariety === targetVariety &&
+      recordGrade === targetGrade
+    );
   });
 
-  // Separate records with valid modal prices from missing/invalid price records
   const pricedMandis = [];
   const unpricedMandis = [];
 
-  for (const record of strictlyMatchingRecords) {
+  for (const record of matchingRecords) {
+    // Prefer coordinates provided by the price data source.
+    // Otherwise use manually verified coordinates, then try OSM lookup.
+    const manualCoords = getMandiCoordinates(record);
+
+    const hasRecordCoords = isValidCoordinates(
+      record.latitude,
+      record.longitude
+    );
+
+   let mandiLat = null;
+let mandiLng = null;
+let locationAccuracy = null;
+let locationVerified = false;
+
+if (hasRecordCoords) {
+  mandiLat = Number(record.latitude);
+  mandiLng = Number(record.longitude);
+  locationAccuracy = "mandi";
+  locationVerified = true;
+} else if (manualCoords) {
+  mandiLat = Number(manualCoords.lat);
+  mandiLng = Number(manualCoords.lng);
+  locationAccuracy = manualCoords.accuracy;
+  locationVerified = manualCoords.verified;
+} else {
+  try {
+    const foundCoords = await getMandiLocation(
+      record.market,
+      record.district,
+      record.state
+    );
+
+    if (foundCoords) {
+      mandiLat = Number(foundCoords.lat);
+      mandiLng = Number(foundCoords.lng);
+      locationAccuracy =
+        foundCoords.locationAccuracy || "unverified";
+    }
+  } catch (error) {
+    console.error("Mandi location lookup failed:", error.message);
+  }
+}
+
     let distanceKm = null;
     let distanceAvailable = false;
 
-    if (farmerCoords && isValidCoordinates(record.latitude, record.longitude)) {
+    if (
+      farmerCoords &&
+      isValidCoordinates(mandiLat, mandiLng)
+    ) {
       distanceKm = calculateDistance(
         farmerCoords.lat,
         farmerCoords.lon,
-        record.latitude,
-        record.longitude
+        mandiLat,
+        mandiLng
       );
-      distanceAvailable = distanceKm !== null;
+
+      distanceAvailable = Number.isFinite(distanceKm);
+
+      if (!distanceAvailable) {
+        distanceKm = null;
+      } else {
+        distanceKm = Math.round(distanceKm * 100) / 100;
+      }
     }
 
     const item = {
@@ -251,93 +328,115 @@ async function compareMandis(params = {}) {
       district: record.district,
       state: record.state,
       commodity: record.commodity,
-      variety: basis.variety, // Preserves exact basis label
-      grade: basis.grade,     // Preserves exact basis label
+      variety: basis.variety,
+      grade: basis.grade,
       arrivalDate: record.date || record.arrivalDate,
       minPrice: record.minPrice,
       maxPrice: record.maxPrice,
       modalPrice: record.modalPrice,
       distanceKm,
-      distanceAvailable
+      distanceAvailable,
     };
 
     if (
       record.modalPrice !== null &&
+      record.modalPrice !== undefined &&
       record.isPriceValid !== false &&
       !isNaN(record.modalPrice) &&
-      record.modalPrice > 0
+      Number(record.modalPrice) > 0
     ) {
       pricedMandis.push(item);
     } else {
       unpricedMandis.push({
         ...item,
         priceAvailable: false,
-        note: 'Modal price unavailable for this reporting date.'
+        note: 'Modal price unavailable for this reporting date.',
       });
     }
   }
 
-  // Distance sorting feasibility check
-  const hasDistances = pricedMandis.some((m) => m.distanceAvailable);
+  const hasDistances = pricedMandis.some(
+    (mandi) => mandi.distanceAvailable
+  );
+
   let appliedSortBy = 'price';
 
-  if (requestedSortBy === 'distance' && farmerCoords && hasDistances) {
+  if (
+    requestedSortBy === 'distance' &&
+    farmerCoords &&
+    hasDistances
+  ) {
     appliedSortBy = 'distance';
+
     pricedMandis.sort((a, b) => {
-      if (a.distanceKm === null && b.distanceKm === null) return b.modalPrice - a.modalPrice;
+      if (a.distanceKm === null && b.distanceKm === null) {
+        return b.modalPrice - a.modalPrice;
+      }
+
       if (a.distanceKm === null) return 1;
       if (b.distanceKm === null) return -1;
-      if (a.distanceKm !== b.distanceKm) return a.distanceKm - b.distanceKm;
+
+      if (a.distanceKm !== b.distanceKm) {
+        return a.distanceKm - b.distanceKm;
+      }
+
       return b.modalPrice - a.modalPrice;
     });
   } else {
-    appliedSortBy = 'price';
-    // Sort by modalPrice descending. Ties broken by distance (if known) then market name alphabetically
     pricedMandis.sort((a, b) => {
       if (b.modalPrice !== a.modalPrice) {
         return b.modalPrice - a.modalPrice;
       }
-      if (a.distanceKm !== null && b.distanceKm !== null && a.distanceKm !== b.distanceKm) {
+
+      if (
+        a.distanceKm !== null &&
+        b.distanceKm !== null &&
+        a.distanceKm !== b.distanceKm
+      ) {
         return a.distanceKm - b.distanceKm;
       }
-      return a.market.localeCompare(b.market);
+
+      return (a.market || '').localeCompare(b.market || '');
     });
   }
 
-  // Requirement 7 & 8: Calculate bestMandi, ties, and priceSpread from exactly the eligible records in `mandis`
   let bestMandi = null;
   let tiedBestMandis = [];
   let isTieForBestPrice = false;
   let priceSpread = null;
 
   if (pricedMandis.length > 0) {
-    const highestPrice = Math.max(...pricedMandis.map((m) => m.modalPrice));
-    const lowestPrice = Math.min(...pricedMandis.map((m) => m.modalPrice));
+    const prices = pricedMandis.map((mandi) => Number(mandi.modalPrice));
+    const highestPrice = Math.max(...prices);
+    const lowestPrice = Math.min(...prices);
 
-    tiedBestMandis = pricedMandis.filter((m) => m.modalPrice === highestPrice);
+    tiedBestMandis = pricedMandis.filter(
+      (mandi) => Number(mandi.modalPrice) === highestPrice
+    );
+
     isTieForBestPrice = tiedBestMandis.length > 1;
 
-    // Pick top sorted item as primary bestMandi
     const topMandi = pricedMandis[0];
+
     bestMandi = {
       market: topMandi.market,
       district: topMandi.district,
       modalPrice: topMandi.modalPrice,
       arrivalDate: topMandi.arrivalDate,
-      distanceKm: topMandi.distanceKm
+      distanceKm: topMandi.distanceKm,
     };
 
     if (pricedMandis.length >= 2) {
       priceSpread = {
         highestPrice,
         lowestPrice,
-        difference: Math.round((highestPrice - lowestPrice) * 100) / 100
+        difference: Math.round((highestPrice - lowestPrice) * 100) / 100,
       };
     }
   }
 
-  // Requirement 5: Indicate insufficient comparable markets if < 2 mandis match the basis
   const hasComparableMarkets = pricedMandis.length >= 2;
+
   const comparisonMessage = !hasComparableMarkets
     ? pricedMandis.length === 1
       ? `Only 1 mandi found matching variety "${basis.variety}" and grade "${basis.grade}". Insufficient comparable markets in this query for cross-market comparison.`
@@ -354,7 +453,7 @@ async function compareMandis(params = {}) {
       variety: basis.variety,
       grade: basis.grade,
       selectionRule: basis.selectionRule,
-      note: 'Comparing like with like. Different varieties and grades are never mixed.'
+      note: 'Comparing like with like. Different varieties and grades are never mixed.',
     },
     sortBy: appliedSortBy,
     farmerLocationProvided: Boolean(farmerCoords),
@@ -366,25 +465,25 @@ async function compareMandis(params = {}) {
     bestMandi,
     isTieForBestPrice,
     tiedBestMandis: isTieForBestPrice
-      ? tiedBestMandis.map((m) => ({
-          market: m.market,
-          district: m.district,
-          modalPrice: m.modalPrice,
-          arrivalDate: m.arrivalDate,
-          distanceKm: m.distanceKm
+      ? tiedBestMandis.map((mandi) => ({
+          market: mandi.market,
+          district: mandi.district,
+          modalPrice: mandi.modalPrice,
+          arrivalDate: mandi.arrivalDate,
+          distanceKm: mandi.distanceKm,
         }))
       : undefined,
     tieBreakingRule: isTieForBestPrice
-      ? 'Multiple mandis share the highest price. Primary bestMandi is broken by nearest distance (if coordinates provided) or alphabetical market order.'
+      ? 'Multiple mandis share the highest price. Primary bestMandi is broken by the selected sorting order.'
       : undefined,
     priceSpread,
     mandis: pricedMandis,
-    unpricedMandis
+    unpricedMandis,
   };
 }
 
 module.exports = {
   validateCompareParams,
   determineComparisonBasis,
-  compareMandis
+  compareMandis,
 };

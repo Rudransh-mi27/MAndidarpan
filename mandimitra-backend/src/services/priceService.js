@@ -1,188 +1,172 @@
-const { isConfigured, buildDataGovUrl } = require('../config/dataGovApi');
-const { normalizeRecord } = require('../utils/normalizeData');
-const { calculateTrend, validateTrendParams } = require('./trendService');
-const { calculateHaversineDistance, isValidCoordinates } = require('../utils/geoUtils');
 
-/**
- * Verifies that a normalized record matches requested filter values case-insensitively.
- * 
- * @param {object} record Normalized record
- * @param {object} filters Requested filters
- * @returns {boolean}
- */
+const { isConfigured, buildDataGovUrl } = require("../config/dataGovApi");
+const { normalizeRecord } = require("../utils/normalizeData");
+const { calculateTrend, validateTrendParams } = require("./trendService");
+const {
+  calculateHaversineDistance,
+  isValidCoordinates,
+} = require("../utils/geoUtils");
+const { getMandiCoordinates } = require("../utils/mandiCoordinates");
+
 function recordMatchesFilters(record, filters) {
-  if (filters.commodity && typeof filters.commodity === 'string' && filters.commodity.trim()) {
+  if (filters.commodity && typeof filters.commodity === "string" && filters.commodity.trim()) {
     const target = filters.commodity.trim().toLowerCase();
-    const actual = (record.commodity || '').toLowerCase();
-    const matches = actual === target || actual.startsWith(target + '(') || actual.startsWith(target + ' ');
+    const actual = (record.commodity || "").toLowerCase();
+    const matches = actual === target ||
+      actual.startsWith(target + "(") ||
+      actual.startsWith(target + " ");
     if (!matches) return false;
   }
 
-  if (filters.district && typeof filters.district === 'string' && filters.district.trim()) {
-    const target = filters.district.trim().toLowerCase();
-    const actual = (record.district || '').toLowerCase();
-    if (actual !== target) return false;
+  if (filters.district && typeof filters.district === "string" && filters.district.trim()) {
+    if ((record.district || "").toLowerCase() !== filters.district.trim().toLowerCase()) {
+      return false;
+    }
   }
 
-  if (filters.state && typeof filters.state === 'string' && filters.state.trim()) {
-    const target = filters.state.trim().toLowerCase();
-    const actual = (record.state || '').toLowerCase();
-    if (actual !== target) return false;
+  if (filters.state && typeof filters.state === "string" && filters.state.trim()) {
+    if ((record.state || "").toLowerCase() !== filters.state.trim().toLowerCase()) {
+      return false;
+    }
   }
 
   return true;
 }
 
-/**
- * Executes a filtered query against data.gov.in.
- * 
- * @param {object} filters { commodity, district, state, limit, offset }
- * @returns {Promise<object>}
- */
+
 async function fetchMandiPrices(filters = {}) {
   if (!isConfigured()) {
     return {
       success: false,
-      status: 'unconfigured',
-      error: 'DATA_GOV_API_KEY is not configured or contains placeholder in .env.'
+      status: "unconfigured",
+      error: "DATA_GOV_API_KEY is not configured in .env.",
     };
   }
 
-  const requestUrl = buildDataGovUrl({
-    commodity: filters.commodity,
-    district: filters.district,
-    state: filters.state,
-    limit: filters.limit || 100,
-    offset: filters.offset || 0
-  });
+  const allRecords = [];
+  let apiTotal = 0;
+  let offset = 0;
+  const pageSize = 500;
+  const maxPages = 20;
 
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), 20000);
 
   try {
-    const response = await fetch(requestUrl, {
-      signal: controller.signal,
-      headers: {
-        Accept: 'application/json'
+    for (let page = 0; page < maxPages; page++) {
+      // Fetch by commodity only; apply state/district locally.
+      const requestUrl = buildDataGovUrl({
+        commodity: filters.commodity,
+        limit: pageSize,
+        offset,
+      });
+
+    
+
+      const response = await fetch(requestUrl, {
+        signal: controller.signal,
+        headers: { Accept: "application/json" },
+      });
+
+      if (!response.ok) {
+        return {
+          success: false,
+          status: "api_error",
+          statusCode: response.status,
+          error: `data.gov.in returned HTTP ${response.status}.`,
+        };
       }
-    });
 
-    if (!response.ok) {
-      return {
-        success: false,
-        status: 'api_error',
-        statusCode: response.status,
-        error: `Upstream data.gov.in API returned HTTP ${response.status}: ${response.statusText}`
-      };
+      const data = await response.json();
+
+      if (!Array.isArray(data.records)) {
+        return {
+          success: false,
+          status: "api_error",
+          error: `Unexpected data.gov.in response: ${data.message || "records array missing"}.`,
+        };
+      }
+
+      const pageRecords = data.records;
+      apiTotal =
+        typeof data.total === "number" ? data.total : pageRecords.length;
+
+      allRecords.push(...pageRecords);
+
+      if (
+        pageRecords.length === 0 ||
+        allRecords.length >= apiTotal ||
+        pageRecords.length < pageSize
+      ) {
+        break;
+      }
+
+      offset += pageRecords.length;
     }
 
-    const data = await response.json();
-    const rawRecords = Array.isArray(data.records) ? data.records : [];
-    const totalCount = typeof data.total === 'number' ? data.total : rawRecords.length;
-
-    if (totalCount === 0 || rawRecords.length === 0) {
-      return {
-        success: true,
-        status: 'no_data',
-        count: 0,
-        total: 0,
-        commodity: filters.commodity || null,
-        district: filters.district || null,
-        state: filters.state || null,
-        records: [],
-        message: 'No mandi price records found matching the requested filters.'
-      };
-    }
-
-    const normalized = rawRecords
+    const normalized = allRecords
       .map(normalizeRecord)
       .filter(Boolean)
-      .filter((rec) => recordMatchesFilters(rec, filters));
-
-    if (normalized.length === 0) {
-      return {
-        success: true,
-        status: 'no_data',
-        count: 0,
-        total: totalCount,
-        commodity: filters.commodity || null,
-        district: filters.district || null,
-        state: filters.state || null,
-        records: [],
-        message: 'No mandi price records found matching the requested filters after verification.'
-      };
-    }
+      .filter((record) => recordMatchesFilters(record, filters));
 
     return {
       success: true,
-      status: 'success',
+      status: normalized.length ? "success" : "no_data",
       count: normalized.length,
-      total: totalCount,
+      total: apiTotal,
       commodity: filters.commodity || null,
       district: filters.district || null,
       state: filters.state || null,
-      records: normalized
+      records: normalized,
+      message: normalized.length
+        ? undefined
+        : "No records matched the selected commodity, state and district in the fetched API data.",
     };
   } catch (err) {
-    if (err.name === 'AbortError') {
-      return {
-        success: false,
-        status: 'api_error',
-        error: 'Upstream data.gov.in API request timed out (20s limit).'
-      };
-    }
     return {
       success: false,
-      status: 'api_error',
-      error: `Failed to connect to data.gov.in: ${err.message}`
+      status: "api_error",
+      error:
+        err.name === "AbortError"
+          ? "data.gov.in request timed out."
+          : `Failed to fetch mandi prices: ${err.message}`,
     };
   } finally {
     clearTimeout(timeoutId);
   }
 }
 
-/**
- * Service function for GET /api/prices/today
- */
+
 async function getTodayPrices(params = {}) {
   return fetchMandiPrices(params);
 }
 
-/**
- * Service function for GET /api/prices/trend
- * Distinguishes:
- *   - no_data: Successful source lookup with no matching records.
- *   - price_unavailable: Matching records exist but modal price is unavailable or invalid.
- *   - insufficient_data: Too few valid observations (< 2) for a trend.
- *   - source_unavailable: External data source failed.
- */
 async function getPriceTrend(params = {}) {
   const validation = validateTrendParams(params);
+
   if (!validation.isValid) {
     return {
       success: false,
-      status: 'invalid_params',
-      error: validation.error
+      status: "invalid_params",
+      error: validation.error,
     };
   }
 
   const { commodity, district, days } = validation;
   const { market, variety, grade, state } = params;
 
-  // Retrieve raw records from data.gov.in
   const fetchResult = await fetchMandiPrices({
     commodity,
     district,
     state,
-    limit: 100
+    limit: 100,
   });
 
-  // Source unavailable (API key missing, upstream network failure, timeout)
   if (!fetchResult.success) {
     return {
       success: false,
-      status: 'source_unavailable',
-      message: 'External price data source is unavailable.',
+      status: "source_unavailable",
+      message: "External price data source is unavailable.",
       error: fetchResult.error,
       recordsAvailable: 0,
       commodity,
@@ -190,37 +174,36 @@ async function getPriceTrend(params = {}) {
       history: [],
       calendarSeries: [],
       change: null,
-      direction: 'unknown'
+      direction: "unknown",
     };
   }
 
-  // Calculate trend using strict series isolation & validation
   const trendResult = calculateTrend(fetchResult.records, {
     commodity,
     district,
     days,
     market,
     variety,
-    grade
+    grade,
   });
 
   return {
     success: true,
-    ...trendResult
+    ...trendResult,
   };
 }
 
-/**
- * Service function for GET /api/mandis/compare
- */
 async function compareMandis(params = {}) {
   const { commodity, district, state, lat, lng } = params;
+
+  
+  console.log("Incoming comparison params:", { commodity, district, state, lat, lng });
 
   if (!commodity || !commodity.trim()) {
     return {
       success: false,
-      status: 'invalid_params',
-      error: 'Query parameter "commodity" is required for mandi comparison.'
+      status: "invalid_params",
+      error: 'Query parameter "commodity" is required for mandi comparison.',
     };
   }
 
@@ -228,40 +211,52 @@ async function compareMandis(params = {}) {
     commodity: commodity.trim(),
     district: district ? district.trim() : undefined,
     state: state ? state.trim() : undefined,
-    limit: 100
+    limit: 100,
   });
 
-  if (!result.success) {
-    return result;
-  }
+  if (!result.success) return result;
 
-  if (result.status === 'no_data' || result.records.length === 0) {
+  if (result.status === "no_data" || result.records.length === 0) {
     return {
       success: true,
-      status: 'no_data',
+      status: "no_data",
       commodity,
       mandis: [],
-      message: `No price records found for commodity "${commodity}".`
+      message: `No price records found for commodity "${commodity}".`,
     };
   }
 
   const hasUserCoords = isValidCoordinates(lat, lng);
 
   const compared = result.records
-    .filter((r) => r.modalPrice !== null && r.isPriceValid !== false)
+    .filter((record) => record.modalPrice !== null && record.isPriceValid !== false)
     .map((record) => {
+      const coords = getMandiCoordinates(record);
+
+      const hasRecordCoords = isValidCoordinates(
+        record.latitude,
+        record.longitude
+      );
+
+      const mandiLat = hasRecordCoords ? record.latitude : coords?.lat;
+      const mandiLng = hasRecordCoords ? record.longitude : coords?.lng;
+
       let distanceKm = null;
       let distanceAvailable = false;
 
-      if (hasUserCoords && isValidCoordinates(record.latitude, record.longitude)) {
+      if (hasUserCoords && isValidCoordinates(mandiLat, mandiLng)) {
         distanceKm = calculateHaversineDistance(
-          lat,
-          lng,
-          record.latitude,
-          record.longitude
+          Number(lat),
+          Number(lng),
+          Number(mandiLat),
+          Number(mandiLng)
         );
-        distanceAvailable = distanceKm !== null;
+
+        distanceAvailable = Number.isFinite(distanceKm);
+        if (!distanceAvailable) distanceKm = null;
       }
+
+     
 
       return {
         market: record.market,
@@ -272,18 +267,21 @@ async function compareMandis(params = {}) {
         maxPrice: record.maxPrice,
         arrivalDate: record.date || record.arrivalDate,
         distanceKm,
-        distanceAvailable
+        distanceAvailable,
       };
     });
 
   const sorted = [...compared].sort((a, b) => b.modalPrice - a.modalPrice);
   const bestMandi = sorted[0];
   const lowestMandi = sorted[sorted.length - 1];
-  const priceDifference = bestMandi ? bestMandi.modalPrice - lowestMandi.modalPrice : 0;
+
+  const priceDifference = bestMandi
+    ? bestMandi.modalPrice - lowestMandi.modalPrice
+    : 0;
 
   return {
     success: true,
-    status: 'success',
+    status: "success",
     commodity,
     userCoordinatesProvided: hasUserCoords,
     totalMandis: sorted.length,
@@ -291,17 +289,17 @@ async function compareMandis(params = {}) {
       ? {
           market: bestMandi.market,
           district: bestMandi.district,
-          modalPrice: bestMandi.modalPrice
+          modalPrice: bestMandi.modalPrice,
         }
       : null,
     priceSpread: bestMandi
       ? {
           maxPrice: bestMandi.modalPrice,
           minPrice: lowestMandi.modalPrice,
-          difference: Math.round(priceDifference * 100) / 100
+          difference: Math.round(priceDifference * 100) / 100,
         }
       : null,
-    mandis: sorted
+    mandis: sorted,
   };
 }
 
@@ -311,5 +309,5 @@ module.exports = {
   fetchMandiPrices,
   getTodayPrices,
   getPriceTrend,
-  compareMandis
+  compareMandis,
 };
