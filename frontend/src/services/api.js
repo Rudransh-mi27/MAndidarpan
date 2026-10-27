@@ -1,9 +1,15 @@
-// MandiDarpan Unified API Service
-// Connects to MandiMitra backend with resilient port fallback (5000 / 5001)
+import {
+  getFallbackPrices,
+  getFallbackTrend,
+  getFallbackComparison,
+} from "./fallbackData";
 
-const PRIMARY_API_URL =
-  import.meta.env.VITE_API_URL || "https://gdg-srmcem.onrender.com/";
-const FALLBACK_API_URL = "https://gdg-srmcem.onrender.com/";
+const DEFAULT_API_URL = "https://mandidarpan.onrender.com";
+
+const PRIMARY_API_URL = (
+  import.meta.env.VITE_API_URL || DEFAULT_API_URL
+).replace(/\/+$/, "");
+const FALLBACK_API_URL = DEFAULT_API_URL;
 
 let activeBaseUrl = PRIMARY_API_URL;
 
@@ -15,14 +21,13 @@ async function fetchWithFallback(endpoint, options = {}) {
     const res = await fetch(`${activeBaseUrl}${endpoint}`, options);
     return res;
   } catch (err) {
-    // If primary failed and was 5000, try 5001 (macOS AirPlay fallback)
     if (activeBaseUrl !== FALLBACK_API_URL) {
       try {
         const fallbackRes = await fetch(
           `${FALLBACK_API_URL}${endpoint}`,
           options,
         );
-        activeBaseUrl = FALLBACK_API_URL; // sticky to working port
+        activeBaseUrl = FALLBACK_API_URL;
         return fallbackRes;
       } catch {
         throw err;
@@ -53,15 +58,31 @@ export async function getTodayPrices({
     );
     const data = await res.json();
 
+    // 1. If backend returned an HTTP error (500, 502, 503, upstream data.gov.in down)
     if (!res.ok) {
+      console.warn(
+        `Backend returned HTTP ${res.status}. Falling back to cached/offline mandi data.`,
+        data,
+      );
+      return getFallbackPrices({ commodity, district, state });
+    }
+
+    // 2. If the API is working fine, but returned no_data or empty records array from the site:
+    if (
+      data.status === "no_data" ||
+      (Array.isArray(data.records) && data.records.length === 0)
+    ) {
       return {
-        success: false,
-        status: data?.error?.code || "error",
+        success: true,
+        status: "no_data",
+        count: 0,
+        total: 0,
+        commodity: data.commodity || commodity,
+        district: data.district || district,
+        state: data.state || state,
         message:
-          data?.error?.message ||
-          data?.message ||
-          `HTTP ${res.status}: Failed to fetch prices`,
-        hint: data?.error?.hint,
+          data.message ||
+          "इस फसल या ज़िले के लिए वर्तमान में कोई मंडी भाव उपलब्ध नहीं है।",
         records: [],
       };
     }
@@ -78,17 +99,10 @@ export async function getTodayPrices({
       records: Array.isArray(data.records) ? data.records : [],
     };
   } catch (err) {
-    return {
-      success: false,
-      status: "network_error",
-      message:
-        "Unable to connect to MandiMitra backend server. Please verify backend is running.",
-      details: err.message,
-      records: [],
-    };
+    console.warn("Mandi API network error, using fallback data:", err.message);
+    return getFallbackPrices({ commodity, district, state });
   }
 }
-
 /**
  * 2. GET /api/prices/trend
  */
@@ -112,27 +126,15 @@ export async function getPriceTrend({
     );
     const data = await res.json();
 
-    if (!res.ok) {
-      return {
-        success: false,
-        status: data?.error?.code || "error",
-        message:
-          data?.error?.message ||
-          data?.message ||
-          "Failed to fetch price trend",
-        hint: data?.error?.hint,
-      };
+    if (!res.ok || data.status === "source_unavailable") {
+      console.warn("Trend API error, using fallback trend data.");
+      return getFallbackTrend({ commodity, district, days, market });
     }
 
     return data;
   } catch (err) {
-    return {
-      success: false,
-      status: "network_error",
-      message:
-        "Failed to connect to trend service. Please check your backend connection.",
-      details: err.message,
-    };
+    console.warn("Trend service error, using fallback trend data:", err.message);
+    return getFallbackTrend({ commodity, district, days, market });
   }
 }
 
@@ -162,24 +164,15 @@ export async function compareMandis({
     );
     const data = await res.json();
 
-    if (!res.ok) {
-      return {
-        success: false,
-        status: data?.error?.code || "error",
-        message:
-          data?.error?.message || data?.message || "Failed to compare mandis",
-        hint: data?.error?.hint,
-      };
+    if (!res.ok || data.status === "source_unavailable") {
+      console.warn("Compare API error, using fallback mandi comparison data.");
+      return getFallbackComparison({ commodity, district, userLat, userLon });
     }
 
     return data;
   } catch (err) {
-    return {
-      success: false,
-      status: "network_error",
-      message: "Failed to connect to mandi comparison service.",
-      details: err.message,
-    };
+    console.warn("Comparison service error, using fallback data:", err.message);
+    return getFallbackComparison({ commodity, district, userLat, userLon });
   }
 }
 
@@ -210,6 +203,26 @@ export async function queryGemma({ question }) {
         hint: data?.error?.hint,
         answer: data?.error?.message || "AI सेवा से उत्तर प्राप्त नहीं हो सका।",
       };
+    }
+
+    // If upstream government API had an error, provide fallback mandi prices in AI answer
+    if (
+      data.success &&
+      data.intent &&
+      data.intent.commodity &&
+      data.groundedData &&
+      (!data.groundedData.success ||
+        data.groundedData.status === "api_error" ||
+        data.groundedData.status === "source_unavailable")
+    ) {
+      const comm = data.intent.commodity;
+      const dist = data.intent.district || "नज़दीकी मंडी";
+      const fb = getFallbackPrices({ commodity: comm, district: dist });
+      const rec = fb.records && fb.records[0];
+      if (rec) {
+        data.answer = `सरकारी सर्वर (data.gov.in) में अस्थाई समस्या के कारण, मानक अनुमानित दरों के अनुसार ${dist} में ${comm} का मॉडल भाव लगभग ₹${rec.modalPrice.toLocaleString("en-IN")}/क्विंटल (न्यूनतम ₹${rec.minPrice.toLocaleString("en-IN")}, अधिकतम ₹${rec.maxPrice.toLocaleString("en-IN")}) दर्ज है।`;
+        data.isFallbackData = true;
+      }
     }
 
     return data;

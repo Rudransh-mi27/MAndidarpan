@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Store, Calendar, MapPin, Tag, RefreshCw } from 'lucide-react';
+import { Search, Store, Calendar, MapPin, Tag, RefreshCw, AlertCircle } from 'lucide-react';
 import PageHeader from '../components/PageHeader';
 import LoadingIndicator from '../components/LoadingIndicator';
 import ErrorMessage from '../components/ErrorMessage';
@@ -168,6 +168,23 @@ export default function LivePricesPage() {
             fetchLivePrices({ district: d });
           }}
         />
+      )}
+
+      {/* Fallback Banner */}
+      {!loading && !error && data?.isFallbackData && (
+        <div className="p-3.5 bg-amber-50 border border-amber-300 rounded-2xl flex items-center gap-3 text-amber-900 text-xs md:text-sm shadow-sm">
+          <AlertCircle className="text-amber-600 shrink-0" size={20} />
+          <div>
+            <span className="font-bold">
+              {lang === 'hi' ? 'ऑफलाइन / मानक भाव मोड:' : 'Offline Reference Mode:'}
+            </span>{' '}
+            <span>
+              {lang === 'hi'
+                ? 'सरकारी पोर्टल (data.gov.in) डाउन होने के कारण मानक मंडी भाव दिखाए जा रहे हैं।'
+                : 'Govt server (data.gov.in) is currently down; showing offline reference mandi rates.'}
+            </span>
+          </div>
+        </div>
       )}
 
       {/* Results Table */}

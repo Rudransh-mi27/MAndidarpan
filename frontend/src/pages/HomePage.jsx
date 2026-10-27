@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Search, MapPin, Wheat, RefreshCw, TrendingUp, Scale, Compass, Bot, ShieldCheck } from 'lucide-react';
+import { Search, MapPin, Wheat, RefreshCw, TrendingUp, Scale, Compass, Bot, ShieldCheck, AlertCircle } from 'lucide-react';
 import { useLanguage } from '../context/LanguageContext';
 import { POPULAR_CROPS, POPULAR_STATES, SUGGESTED_DISTRICTS } from '../utils/translations';
 import { getTodayPrices } from '../services/api';
@@ -233,6 +233,22 @@ export default function HomePage({ onNavigate }) {
 
         {!loading && !error && primaryRecord && (
           <div className="space-y-6">
+            {data?.isFallbackData && (
+              <div className="p-3.5 bg-amber-50 border border-amber-300 rounded-2xl flex items-center gap-3 text-amber-900 text-xs md:text-sm shadow-sm">
+                <AlertCircle className="text-amber-600 shrink-0" size={20} />
+                <div>
+                  <span className="font-bold">
+                    {lang === 'hi' ? 'ऑफलाइन / मानक भाव मोड:' : 'Offline Reference Mode:'}
+                  </span>{' '}
+                  <span>
+                    {lang === 'hi'
+                      ? 'सरकारी पोर्टल (data.gov.in) सर्वर डाउन होने के कारण मानक मंडी भाव दिखाए जा रहे हैं।'
+                      : 'Govt server (data.gov.in) is currently down; showing offline reference mandi rates.'}
+                  </span>
+                </div>
+              </div>
+            )}
+
             <div className="flex items-center justify-between">
               <h3 className="text-xl md:text-2xl font-extrabold text-[#0f3d24]">
                 {t.home.latestPriceCardTitle}
