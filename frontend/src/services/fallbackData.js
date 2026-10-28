@@ -142,12 +142,14 @@ export function getFallbackTrend({ commodity = "Wheat", district = "Lucknow", da
   };
 }
 
-export function getFallbackComparison({ commodity = "Tomato", district = "Lucknow", userLat = 26.85, userLon = 80.95 }) {
+export function getFallbackComparison({ commodity = "Tomato", district = "Lucknow", userLat = null, userLon = null }) {
   const commKey = Object.keys(BASE_COMMODITY_PRICES).find(
     (k) => k.toLowerCase() === (commodity || "").toLowerCase()
   ) || "Tomato";
 
   const info = BASE_COMMODITY_PRICES[commKey];
+  const centerLat = userLat ? Number(userLat) : 26.85;
+  const centerLon = userLon ? Number(userLon) : 80.95;
 
   const mandis = [
     {
@@ -158,6 +160,8 @@ export function getFallbackComparison({ commodity = "Tomato", district = "Luckno
       modalPrice: info.modal + 60,
       minPrice: info.min + 40,
       maxPrice: info.max + 80,
+      latitude: centerLat + 0.045,
+      longitude: centerLon + 0.038,
       distanceKm: 8.5,
       netRevenuePerQuintal: (info.modal + 60) - 40,
       variety: info.variety,
@@ -172,6 +176,8 @@ export function getFallbackComparison({ commodity = "Tomato", district = "Luckno
       modalPrice: info.modal + 20,
       minPrice: info.min,
       maxPrice: info.max + 30,
+      latitude: centerLat - 0.082,
+      longitude: centerLon + 0.065,
       distanceKm: 14.2,
       netRevenuePerQuintal: (info.modal + 20) - 70,
       variety: info.variety,
@@ -179,13 +185,15 @@ export function getFallbackComparison({ commodity = "Tomato", district = "Luckno
       isRecommended: false
     },
     {
-      mandi: `निकटवर्ती उपमंडी`,
-      market: `निकटवर्ती उपमंडी`,
+      mandi: `निकटवर्ती उपमंडी (${district})`,
+      market: `निकटवर्ती उपमंडी (${district})`,
       district,
       state: "Uttar Pradesh",
       modalPrice: info.modal - 30,
       minPrice: info.min - 50,
       maxPrice: info.max,
+      latitude: centerLat + 0.021,
+      longitude: centerLon - 0.025,
       distanceKm: 4.1,
       netRevenuePerQuintal: (info.modal - 30) - 20,
       variety: info.variety,
@@ -193,6 +201,24 @@ export function getFallbackComparison({ commodity = "Tomato", district = "Luckno
       isRecommended: false
     }
   ];
+
+  // If user coordinates provided, compute real straight-line km
+  if (userLat !== null && userLon !== null) {
+    mandis.forEach((m) => {
+      const dLat = ((m.latitude - userLat) * Math.PI) / 180;
+      const dLon = ((m.longitude - userLon) * Math.PI) / 180;
+      const a =
+        Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+        Math.cos((userLat * Math.PI) / 180) *
+          Math.cos((m.latitude * Math.PI) / 180) *
+          Math.sin(dLon / 2) *
+          Math.sin(dLon / 2);
+      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+      m.distanceKm = Number((6371 * c).toFixed(1));
+    });
+
+    mandis.sort((a, b) => (a.distanceKm || 999) - (b.distanceKm || 999));
+  }
 
   return {
     success: true,

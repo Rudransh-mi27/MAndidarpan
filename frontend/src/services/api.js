@@ -6,10 +6,19 @@ import {
 
 const DEFAULT_API_URL = "https://m-andidarpan.vercel.app";
 
-const PRIMARY_API_URL = (
+const sanitizeBaseUrl = (url) => {
+  if (!url) return DEFAULT_API_URL;
+  return url
+    .trim()
+    .replace(/\/api\/health\/?$/i, "")
+    .replace(/\/api\/?$/i, "")
+    .replace(/\/+$/, "");
+};
+
+const PRIMARY_API_URL = sanitizeBaseUrl(
   import.meta.env.VITE_API_URL || DEFAULT_API_URL
-).replace(/\/+$/, "");
-const FALLBACK_API_URL = DEFAULT_API_URL;
+);
+const FALLBACK_API_URL = sanitizeBaseUrl(DEFAULT_API_URL);
 
 let activeBaseUrl = PRIMARY_API_URL;
 

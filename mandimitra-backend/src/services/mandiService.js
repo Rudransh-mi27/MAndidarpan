@@ -336,6 +336,8 @@ if (hasRecordCoords) {
       modalPrice: record.modalPrice,
       distanceKm,
       distanceAvailable,
+      latitude: mandiLat,
+      longitude: mandiLng,
     };
 
     if (
