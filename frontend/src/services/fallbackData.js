@@ -163,10 +163,26 @@ export function getFallbackComparison({ commodity = "Tomato", district = "Luckno
       latitude: centerLat + 0.045,
       longitude: centerLon + 0.038,
       distanceKm: 8.5,
-      netRevenuePerQuintal: (info.modal + 60) - 40,
+      netRevenuePerQuintal: (info.modal + 60) - 17,
       variety: info.variety,
       grade: "FAQ",
       isRecommended: true
+    },
+    {
+      mandi: `क्षेत्रीय टर्मिनल मंडी (${district} बॉर्डर)`,
+      market: `क्षेत्रीय टर्मिनल मंडी (${district} बॉर्डर)`,
+      district: `${district} देहात`,
+      state: "Uttar Pradesh",
+      modalPrice: info.modal + 100, // Higher sticker price (+₹40)
+      minPrice: info.min + 80,
+      maxPrice: info.max + 120,
+      latitude: centerLat + 0.48, // ~58-62 km away
+      longitude: centerLon + 0.35,
+      distanceKm: 62.0,
+      netRevenuePerQuintal: (info.modal + 100) - 124,
+      variety: info.variety,
+      grade: "FAQ",
+      isRecommended: false
     },
     {
       mandi: `${district} किसान बाज़ार`,
@@ -179,7 +195,7 @@ export function getFallbackComparison({ commodity = "Tomato", district = "Luckno
       latitude: centerLat - 0.082,
       longitude: centerLon + 0.065,
       distanceKm: 14.2,
-      netRevenuePerQuintal: (info.modal + 20) - 70,
+      netRevenuePerQuintal: (info.modal + 20) - 28,
       variety: info.variety,
       grade: "FAQ",
       isRecommended: false
@@ -195,7 +211,7 @@ export function getFallbackComparison({ commodity = "Tomato", district = "Luckno
       latitude: centerLat + 0.021,
       longitude: centerLon - 0.025,
       distanceKm: 4.1,
-      netRevenuePerQuintal: (info.modal - 30) - 20,
+      netRevenuePerQuintal: (info.modal - 30) - 8,
       variety: info.variety,
       grade: "FAQ",
       isRecommended: false
