@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Search, MapPin, Wheat, RefreshCw, TrendingUp, Scale, Compass, Bot, ShieldCheck, AlertCircle } from 'lucide-react';
 import { useLanguage } from '../context/LanguageContext';
+import { useAlerts } from '../context/AlertContext';
 import { POPULAR_CROPS, POPULAR_STATES, SUGGESTED_DISTRICTS } from '../utils/translations';
 import { getTodayPrices } from '../services/api';
 import PriceCard from '../components/PriceCard';
@@ -10,6 +11,7 @@ import EmptyState from '../components/EmptyState';
 
 export default function HomePage({ onNavigate }) {
   const { t, lang } = useLanguage();
+  const { checkPricesAgainstAlerts } = useAlerts();
 
   // Search filter states
   const [commodity, setCommodity] = useState('Wheat');
@@ -48,6 +50,9 @@ export default function HomePage({ onNavigate }) {
       setData(null);
     } else {
       setData(res);
+      if (res.records) {
+        checkPricesAgainstAlerts(res.records);
+      }
     }
   };
 

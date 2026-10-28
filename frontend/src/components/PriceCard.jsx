@@ -8,8 +8,10 @@ import {
   AlertTriangle,
   Volume2,
   VolumeX,
+  Bell,
 } from 'lucide-react';
 import { useLanguage } from '../context/LanguageContext';
+import { useAlerts } from '../context/AlertContext';
 import {
   speakText,
   stopSpeaking,
@@ -18,6 +20,7 @@ import {
 
 export default function PriceCard({ record, isFeatured = true }) {
   const { lang, t } = useLanguage();
+  const { openAlertModalWithPrefill } = useAlerts();
   const [isSpeaking, setIsSpeaking] = useState(false);
 
   useEffect(() => {
@@ -138,30 +141,51 @@ export default function PriceCard({ record, isFeatured = true }) {
             )}
           </div>
 
-          {/* Voice Output Button for farmers who prefer listening over reading */}
-          {isSpeechSynthesisSupported() && (
+          {/* Action buttons: Set Alert & Voice Output */}
+          <div className="flex flex-wrap items-center gap-2">
+            {/* Set Alert Button */}
             <button
               type="button"
-              onClick={handleSpeakPrice}
-              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-xs cursor-pointer ${
-                isSpeaking
-                  ? 'bg-rose-600 text-white animate-pulse'
-                  : 'bg-emerald-50 hover:bg-emerald-100 text-[#166534] border border-emerald-300'
-              }`}
-              title={isSpeaking ? 'बोलना रोकें' : 'भाव बोलकर सुनें'}
+              onClick={() =>
+                openAlertModalWithPrefill({
+                  commodity,
+                  district,
+                  currentPrice: modalPrice,
+                  market,
+                })
+              }
+              className="px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-2xs cursor-pointer bg-white hover:bg-emerald-50 text-gray-700 hover:text-[#166534] border border-gray-200 hover:border-emerald-300"
+              title={lang === 'hi' ? 'इस फसल पर भाव अलर्ट सेट करें' : 'Set price alert'}
             >
-              {isSpeaking ? <VolumeX size={14} /> : <Volume2 size={14} />}
-              <span>
-                {isSpeaking
-                  ? lang === 'hi'
-                    ? 'रुकें'
-                    : 'Stop'
-                  : lang === 'hi'
-                  ? '🔊 भाव सुनें'
-                  : '🔊 Listen'}
-              </span>
+              <Bell size={13} className="text-[#166534]" />
+              <span>{lang === 'hi' ? '🔔 अलर्ट सेट करें' : '🔔 Set Alert'}</span>
             </button>
-          )}
+
+            {/* Voice Output Button for farmers who prefer listening over reading */}
+            {isSpeechSynthesisSupported() && (
+              <button
+                type="button"
+                onClick={handleSpeakPrice}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-xs cursor-pointer ${
+                  isSpeaking
+                    ? 'bg-rose-600 text-white animate-pulse'
+                    : 'bg-emerald-50 hover:bg-emerald-100 text-[#166534] border border-emerald-300'
+                }`}
+                title={isSpeaking ? 'बोलना रोकें' : 'भाव बोलकर सुनें'}
+              >
+                {isSpeaking ? <VolumeX size={14} /> : <Volume2 size={14} />}
+                <span>
+                  {isSpeaking
+                    ? lang === 'hi'
+                      ? 'रुकें'
+                      : 'Stop'
+                    : lang === 'hi'
+                    ? '🔊 भाव सुनें'
+                    : '🔊 Listen'}
+                </span>
+              </button>
+            )}
+          </div>
         </div>
 
         {/* Location subtitle */}

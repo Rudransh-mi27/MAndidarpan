@@ -1,11 +1,15 @@
 import React, { useEffect, useState } from 'react';
-import { Menu, Activity } from 'lucide-react';
+import { Menu, Activity, Bell } from 'lucide-react';
 import Logo from './Logo';
 import LanguageToggle from './LanguageToggle';
 import { checkBackendHealth } from '../services/api';
+import { useAlerts } from '../context/AlertContext';
+import { useLanguage } from '../context/LanguageContext';
 
 export default function Topbar({ onMenuClick }) {
   const [backendStatus, setBackendStatus] = useState('checking'); // 'online' | 'offline' | 'checking'
+  const { activeAlertsCount, setIsAlertModalOpen } = useAlerts();
+  const { lang } = useLanguage();
 
   useEffect(() => {
     let isMounted = true;
@@ -53,11 +57,29 @@ export default function Topbar({ onMenuClick }) {
         </div>
       </div>
 
-      {/* Right: Server health indicator & Language Toggle */}
-      <div className="flex items-center gap-3">
+      {/* Right: Price Alerts, Server health indicator & Language Toggle */}
+      <div className="flex items-center gap-2.5">
+        {/* Price Alerts Bell Button */}
+        <button
+          type="button"
+          onClick={() => setIsAlertModalOpen(true)}
+          className="relative px-3 py-1.5 rounded-xl text-gray-700 hover:bg-emerald-50 hover:text-[#166534] border border-gray-200 transition cursor-pointer flex items-center gap-1.5 shadow-2xs"
+          title={lang === 'hi' ? 'भाव अलर्ट सेट करें' : 'Price Alerts'}
+        >
+          <Bell size={16} className="text-[#166534]" />
+          {activeAlertsCount > 0 && (
+            <span className="absolute -top-1.5 -right-1 px-1.5 py-0.2 bg-rose-600 text-white font-extrabold text-[10px] rounded-full min-w-[17px] text-center shadow-xs">
+              {activeAlertsCount}
+            </span>
+          )}
+          <span className="text-xs font-bold hidden sm:inline">
+            {lang === 'hi' ? 'भाव अलर्ट' : 'Alerts'}
+          </span>
+        </button>
+
         {/* Backend health status badge */}
         <div
-          className={`hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold border ${
+          className={`hidden md:flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold border ${
             backendStatus === 'online'
               ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
               : backendStatus === 'offline'

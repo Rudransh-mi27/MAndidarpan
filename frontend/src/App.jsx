@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import Sidebar from './components/Sidebar';
 import Topbar from './components/Topbar';
+import PriceAlertModal from './components/PriceAlertModal';
+import AlertToast from './components/AlertToast';
 import HomePage from './pages/HomePage';
 import LivePricesPage from './pages/LivePricesPage';
 import PriceTrendsPage from './pages/PriceTrendsPage';
@@ -47,6 +49,10 @@ export default function App() {
       <div className="lg:pl-64 flex flex-col flex-1 min-h-screen">
         {/* Topbar Header */}
         <Topbar onMenuClick={() => setSidebarOpen(true)} />
+
+        {/* Global Price Alert Toast & Modal */}
+        <AlertToast />
+        <PriceAlertModal />
 
         {/* Page Content View */}
         <main className="flex-1 p-4 md:p-8 max-w-7xl w-full mx-auto">

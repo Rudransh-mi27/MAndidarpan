@@ -1,15 +1,17 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Store, Calendar, MapPin, Tag, RefreshCw, AlertCircle } from 'lucide-react';
+import { Search, Store, Calendar, MapPin, Tag, RefreshCw, AlertCircle, Bell } from 'lucide-react';
 import PageHeader from '../components/PageHeader';
 import LoadingIndicator from '../components/LoadingIndicator';
 import ErrorMessage from '../components/ErrorMessage';
 import EmptyState from '../components/EmptyState';
 import { useLanguage } from '../context/LanguageContext';
+import { useAlerts } from '../context/AlertContext';
 import { POPULAR_CROPS, POPULAR_STATES, SUGGESTED_DISTRICTS } from '../utils/translations';
 import { getTodayPrices } from '../services/api';
 
 export default function LivePricesPage() {
   const { lang } = useLanguage();
+  const { checkPricesAgainstAlerts, openAlertModalWithPrefill } = useAlerts();
 
   const [commodity, setCommodity] = useState('Wheat');
   const [district, setDistrict] = useState('Lucknow');
@@ -40,6 +42,9 @@ export default function LivePricesPage() {
       setData(null);
     } else {
       setData(res);
+      if (res.records) {
+        checkPricesAgainstAlerts(res.records);
+      }
     }
   };
 
@@ -214,6 +219,7 @@ export default function LivePricesPage() {
                   <th className="py-3.5 px-4 text-right">{lang === 'hi' ? 'अधिकतम (Max)' : 'Max Price'}</th>
                   <th className="py-3.5 px-4 text-right bg-[#166534]">{lang === 'hi' ? 'मॉडल भाव (Modal)' : 'Modal Price'}</th>
                   <th className="py-3.5 px-4 text-center">{lang === 'hi' ? 'तारीख' : 'Date'}</th>
+                  <th className="py-3.5 px-4 text-center">{lang === 'hi' ? 'अलर्ट' : 'Alert'}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100 font-medium">
@@ -251,6 +257,24 @@ export default function LivePricesPage() {
                     </td>
                     <td className="py-3.5 px-4 text-center text-xs text-gray-500 whitespace-nowrap">
                       {rec.arrivalDate || '—'}
+                    </td>
+                    <td className="py-3.5 px-4 text-center whitespace-nowrap">
+                      <button
+                        type="button"
+                        onClick={() =>
+                          openAlertModalWithPrefill({
+                            commodity,
+                            district: rec.district || district,
+                            currentPrice: rec.modalPrice,
+                            market: rec.market,
+                          })
+                        }
+                        className="p-1.5 rounded-lg bg-gray-100 hover:bg-emerald-100 text-gray-600 hover:text-[#166534] transition cursor-pointer inline-flex items-center gap-1 text-xs font-bold"
+                        title={lang === 'hi' ? 'इस भाव पर अलर्ट सेट करें' : 'Set Price Alert'}
+                      >
+                        <Bell size={13} className="text-[#166534]" />
+                        <span className="hidden sm:inline">{lang === 'hi' ? 'अलर्ट' : 'Alert'}</span>
+                      </button>
                     </td>
                   </tr>
                 ))}
