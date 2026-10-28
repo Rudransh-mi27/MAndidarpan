@@ -15,8 +15,8 @@ export default function AiAssistantPage() {
       sender: 'ai',
       text:
         lang === 'hi'
-          ? 'नमस्ते किसान भाई! मैं मंडी दर्पण AI सहायक हूँ। आप मुझसे अपनी भाषा (हिंदी या English) में किसी भी मंडी के भाव, मूल्य रुझान या तुलना के बारे में पूछ सकते हैं।'
-          : 'Hello Farmer Friend! I am your MandiDarpan AI Assistant. Ask me about mandi prices, price trends, or market comparisons in simple Hindi or English.',
+          ? 'नमस्ते किसान भाई! मैं मंडी दर्पण किसान सहायक हूँ। आप मुझसे अपनी भाषा (हिंदी या English) में किसी भी मंडी के भाव, मूल्य रुझान या तुलना के बारे में पूछ सकते हैं।'
+          : 'Hello Farmer Friend! I am your MandiDarpan Kisan Sahayak. Ask me about mandi prices, price trends, or market comparisons in simple Hindi or English.',
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
     },
   ]);
@@ -60,8 +60,8 @@ export default function AiAssistantPage() {
         res.answer ||
         res.message ||
         (lang === 'hi'
-          ? 'माफ़ कीजिए, अभी AI सहायक से उत्तर प्राप्त नहीं हो सका। कृपया बैकएंड कनेक्शन जांचें।'
-          : 'Sorry, could not retrieve AI answer. Please verify backend connection.');
+          ? 'माफ़ कीजिए, अभी किसान सहायक से उत्तर प्राप्त नहीं हो सका। कृपया बैकएंड कनेक्शन जांचें।'
+          : 'Sorry, could not retrieve Kisan Sahayak answer. Please verify backend connection.');
     }
 
     const aiResponse = {
@@ -90,7 +90,7 @@ export default function AiAssistantPage() {
   return (
     <div className="space-y-6 max-w-4xl mx-auto pb-12 flex flex-col h-[calc(100vh-140px)] min-h-[550px]">
       <PageHeader
-        title={lang === 'hi' ? 'AI कृषि मित्र (Gemma 4)' : 'AI Farming Assistant'}
+        title={lang === 'hi' ? 'किसान सहायक (Gemma 4)' : 'Kisan Sahayak (Gemma 4)'}
         subtitle={
           lang === 'hi'
             ? 'सरल बोलचाल की भाषा में मंडी भाव व रुझान पूछें। केवल सत्यापित सरकारी डेटा पर आधारित।'
@@ -108,7 +108,9 @@ export default function AiAssistantPage() {
               <Bot size={18} />
             </div>
             <div>
-              <h4 className="font-bold text-sm">MandiDarpan AI</h4>
+              <h4 className="font-bold text-sm">
+                {lang === 'hi' ? 'MandiDarpan किसान सहायक' : 'MandiDarpan Kisan Sahayak'}
+              </h4>
               <p className="text-[11px] text-emerald-200">Gemma 4 • Zero-Hallucination Policy</p>
             </div>
           </div>

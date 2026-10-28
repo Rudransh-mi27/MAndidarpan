@@ -4,7 +4,7 @@ import {
   getFallbackComparison,
 } from "./fallbackData";
 
-const DEFAULT_API_URL = "https://mandidarpan.onrender.com";
+const DEFAULT_API_URL = "https://m-andidarpan.vercel.app";
 
 const PRIMARY_API_URL = (
   import.meta.env.VITE_API_URL || DEFAULT_API_URL
