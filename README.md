@@ -1,6 +1,6 @@
-# 🌾 MandiMitra
+# 🌾 MandiDarpan
 
-**MandiMitra** is a full-stack agricultural mandi price platform that helps users find government-reported commodity prices, compare mandis, view price trends, and find nearby mandis.
+**MandiDarpan** is a full-stack agricultural mandi price platform that helps users find government-reported commodity prices, compare mandis, view price trends, and find nearby mandis.
 
 ## 🚀 Features
 
@@ -43,9 +43,8 @@
 
 ```text
 MandiMitra/
-├── mandimitra-frontend/
+├── frontend/
 │   ├── src/
-│   ├── public/
 │   └── package.json
 │
 └── mandimitra-backend/
