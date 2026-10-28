@@ -1,9 +1,33 @@
-import React from 'react';
-import { Calendar, MapPin, Tag, Award, TrendingUp, AlertTriangle } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import {
+  Calendar,
+  MapPin,
+  Tag,
+  Award,
+  TrendingUp,
+  AlertTriangle,
+  Volume2,
+  VolumeX,
+} from 'lucide-react';
 import { useLanguage } from '../context/LanguageContext';
+import {
+  speakText,
+  stopSpeaking,
+  isSpeechSynthesisSupported,
+} from '../utils/speechUtils';
 
 export default function PriceCard({ record, isFeatured = true }) {
-  const { t } = useLanguage();
+  const { lang, t } = useLanguage();
+  const [isSpeaking, setIsSpeaking] = useState(false);
+
+  useEffect(() => {
+    return () => {
+      // Clean up speech on unmount
+      if (isSpeaking) {
+        stopSpeaking();
+      }
+    };
+  }, [isSpeaking]);
 
   if (!record) return null;
 
@@ -20,17 +44,65 @@ export default function PriceCard({ record, isFeatured = true }) {
     maxPrice,
   } = record;
 
-  const hasModalPrice = modalPrice !== null && modalPrice !== undefined && !isNaN(modalPrice);
-  const formattedModalPrice = hasModalPrice ? Number(modalPrice).toLocaleString('en-IN') : null;
-  const formattedMinPrice = minPrice !== null && minPrice !== undefined ? Number(minPrice).toLocaleString('en-IN') : null;
-  const formattedMaxPrice = maxPrice !== null && maxPrice !== undefined ? Number(maxPrice).toLocaleString('en-IN') : null;
+  const hasModalPrice =
+    modalPrice !== null && modalPrice !== undefined && !isNaN(modalPrice);
+  const formattedModalPrice = hasModalPrice
+    ? Number(modalPrice).toLocaleString('en-IN')
+    : null;
+  const formattedMinPrice =
+    minPrice !== null && minPrice !== undefined
+      ? Number(minPrice).toLocaleString('en-IN')
+      : null;
+  const formattedMaxPrice =
+    maxPrice !== null && maxPrice !== undefined
+      ? Number(maxPrice).toLocaleString('en-IN')
+      : null;
+
+  const handleSpeakPrice = () => {
+    if (isSpeaking) {
+      stopSpeaking();
+      setIsSpeaking(false);
+      return;
+    }
+
+    let speechSentence = '';
+    if (lang === 'hi') {
+      speechSentence = `आज ${district || ''} के ${market || 'मंडी'} में ${commodity || 'फसल'} का मॉडल भाव ${
+        hasModalPrice ? `${formattedModalPrice} रुपये प्रति क्विंटल` : 'उपलब्ध नहीं'
+      } है। ${
+        formattedMinPrice
+          ? `न्यूनतम भाव ${formattedMinPrice} रुपये और अधिकतम भाव ${formattedMaxPrice} रुपये दर्ज हुआ है।`
+          : ''
+      }`;
+    } else {
+      speechSentence = `Today at ${market || 'Mandi'} in ${district || ''}, the modal price for ${commodity || 'crop'} is ${
+        hasModalPrice ? `${formattedModalPrice} rupees per quintal` : 'not available'
+      }. ${
+        formattedMinPrice
+          ? `Minimum rate is ${formattedMinPrice} rupees and maximum rate is ${formattedMaxPrice} rupees.`
+          : ''
+      }`;
+    }
+
+    setIsSpeaking(true);
+    speakText({
+      text: speechSentence,
+      lang,
+      rate: 0.9,
+      onStart: () => setIsSpeaking(true),
+      onEnd: () => setIsSpeaking(false),
+      onError: () => setIsSpeaking(false),
+    });
+  };
 
   return (
-    <div className={`rounded-2xl border transition-all duration-200 overflow-hidden ${
-      isFeatured
-        ? 'bg-gradient-to-b from-white to-emerald-50/40 border-emerald-300 shadow-md ring-1 ring-emerald-500/10'
-        : 'bg-white border-gray-200 shadow-sm hover:shadow'
-    }`}>
+    <div
+      className={`rounded-2xl border transition-all duration-200 overflow-hidden ${
+        isFeatured
+          ? 'bg-gradient-to-b from-white to-emerald-50/40 border-emerald-300 shadow-md ring-1 ring-emerald-500/10'
+          : 'bg-white border-gray-200 shadow-sm hover:shadow'
+      }`}
+    >
       {/* Top Header Badge */}
       <div className="bg-[#0f3d24] text-white px-5 py-3 flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-2">
@@ -46,22 +118,49 @@ export default function PriceCard({ record, isFeatured = true }) {
       </div>
 
       <div className="p-5 md:p-6">
-        {/* Commodity and Variety Badges */}
-        <div className="flex flex-wrap items-center gap-2 mb-4">
-          <span className="px-3 py-1 bg-emerald-100 text-[#166534] font-extrabold text-sm rounded-lg flex items-center gap-1">
-            <Tag size={14} />
-            {commodity}
-          </span>
-          {variety && (
-            <span className="px-2.5 py-1 bg-gray-100 text-gray-700 font-semibold text-xs rounded-lg">
-              {t.home.varietyLabel} <strong className="text-gray-900">{variety}</strong>
+        {/* Commodity, Variety Badges & Voice Output Button */}
+        <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="px-3 py-1 bg-emerald-100 text-[#166534] font-extrabold text-sm rounded-lg flex items-center gap-1">
+              <Tag size={14} />
+              {commodity}
             </span>
-          )}
-          {grade && (
-            <span className="px-2.5 py-1 bg-amber-50 text-amber-800 border border-amber-200 font-semibold text-xs rounded-lg flex items-center gap-1">
-              <Award size={12} />
-              {grade}
-            </span>
+            {variety && (
+              <span className="px-2.5 py-1 bg-gray-100 text-gray-700 font-semibold text-xs rounded-lg">
+                {t.home.varietyLabel} <strong className="text-gray-900">{variety}</strong>
+              </span>
+            )}
+            {grade && (
+              <span className="px-2.5 py-1 bg-amber-50 text-amber-800 border border-amber-200 font-semibold text-xs rounded-lg flex items-center gap-1">
+                <Award size={12} />
+                {grade}
+              </span>
+            )}
+          </div>
+
+          {/* Voice Output Button for farmers who prefer listening over reading */}
+          {isSpeechSynthesisSupported() && (
+            <button
+              type="button"
+              onClick={handleSpeakPrice}
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-xs cursor-pointer ${
+                isSpeaking
+                  ? 'bg-rose-600 text-white animate-pulse'
+                  : 'bg-emerald-50 hover:bg-emerald-100 text-[#166534] border border-emerald-300'
+              }`}
+              title={isSpeaking ? 'बोलना रोकें' : 'भाव बोलकर सुनें'}
+            >
+              {isSpeaking ? <VolumeX size={14} /> : <Volume2 size={14} />}
+              <span>
+                {isSpeaking
+                  ? lang === 'hi'
+                    ? 'रुकें'
+                    : 'Stop'
+                  : lang === 'hi'
+                  ? '🔊 भाव सुनें'
+                  : '🔊 Listen'}
+              </span>
+            </button>
           )}
         </div>
 
